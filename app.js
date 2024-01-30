@@ -113,71 +113,80 @@ const deploy_all = async () => {
   try {
     const messages = await Message.find({ sent: false });
 
-    for (const message of messages) {
-      const { _id, contacts, text, image } = message;
+    const sendMessage = async (contact, text, image) => {
+      const final_number =
+        contact.length > 10 ? `${contact}@c.us` : `91${contact}@c.us`;
 
-      const contactsArray = contacts
-        .split(",")
-        .map((contact) => contact.trim());
+      try {
+        const isRegistered = await client.isRegisteredUser(final_number);
 
-      for (const contact of contactsArray) {
-        const final_number =
-          contact.length > 10 ? `${contact}@c.us` : `91${contact}@c.us`;
+        if (isRegistered) {
+          let media;
 
-        try {
-          const isRegistered = await client.isRegisteredUser(final_number);
+          if (image) {
+            const base64Image = fs.readFileSync(image, { encoding: "base64" });
+            media = new MessageMedia("image/png", base64Image);
+          }
 
-          if (isRegistered) {
-            let media;
-
-            if (image) {
-              const base64Image = fs.readFileSync(image, {
-                encoding: "base64",
+          try {
+            if (media) {
+              await client.sendMessage(final_number, media, {
+                caption: text || "",
               });
-              media = new MessageMedia("image/png", base64Image);
-            }
-
-            try {
-              if (media) {
-                await client.sendMessage(final_number, media, {
-                  caption: text || "",
-                });
-                await Message.updateOne({ _id }, { $set: { sent: true } });
-              } else {
-                await client.sendMessage(
-                  final_number,
-                  text || "Default text message"
-                );
-
-                await Message.updateOne({ _id }, { $set: { sent: true } });
-              }
-
-              console.log(`${contact} Message Sent`);
-              counter.success++;
-            } catch (sendError) {
-              console.error(
-                `${contact} Failed to send message: ${sendError.message}`
+            } else {
+              await client.sendMessage(
+                final_number,
+                text || "Default text message"
               );
-              counter.fails++;
             }
-            const randomDelay = getRandomDelay();
-            await delay(randomDelay);
-          } else {
-            console.log(`${contact} Failed: Not registered`);
+
+            await Message.updateOne({ _id }, { $set: { sent: true } });
+            console.log(`${contact} Message Sent`);
+            counter.success++;
+          } catch (sendError) {
+            console.error(
+              `${contact} Failed to send message: ${sendError.message}`
+            );
             counter.fails++;
           }
-        } catch (error) {
-          console.error(`${contact} Failed: ${error.message}`);
+
+          const randomDelay = getRandomDelay();
+          await delay(randomDelay);
+        } else {
+          console.log(`${contact} Failed: Not registered`);
           counter.fails++;
         }
-
-        // const randomDelay = Math.floor(
-        //   Math.random() * (11000 - 5000 + 1) + 5000
-        // );
-        // console.log(randomDelay);
-        // await new Promise((resolve) => setTimeout(resolve, randomDelay));
+      } catch (error) {
+        console.error(`${contact} Failed: ${error.message}`);
+        counter.fails++;
       }
+    };
+
+    // Batch size for parallel processing
+    const batchSize = 10;
+
+    // Split messages into batches
+    const batches = [];
+    for (let i = 0; i < messages.length; i += batchSize) {
+      batches.push(messages.slice(i, i + batchSize));
     }
+
+    // Process batches in parallel
+    await Promise.all(
+      batches.map(async (batch) => {
+        await Promise.all(
+          batch.map(async (message) => {
+            const { _id, contacts, text, image } = message;
+            const contactsArray = contacts
+              .split(",")
+              .map((contact) => contact.trim());
+            await Promise.all(
+              contactsArray.map((contact) => sendMessage(contact, text, image))
+            );
+          })
+        );
+      })
+    );
 
     console.log(`Result: ${counter.success} sent, ${counter.fails} failed`);
   } catch (error) {
@@ -186,6 +195,8 @@ const deploy_all = async () => {
     isDeploying = false;
   }
 };
+
+setInterval(deploy_all, 10000);
 
 setInterval(deploy_all, 10000);
 
