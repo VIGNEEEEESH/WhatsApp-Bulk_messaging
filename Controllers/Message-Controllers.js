@@ -22,8 +22,17 @@ const createMessage = async (req, res, next) => {
     createdMessageData.text = text.trim();
   }
 
-  if (req.file && req.file.path) {
-    createdMessageData.image = req.file.path;
+  // if (req.file && req.file.path) {
+  //   createdMessageData.image = req.file.path;
+  // }
+
+  let image = req.files["image"] ? req.files["image"][0].path : null;
+
+  let pdf = req.files["pdf"] ? req.files["pdf"][0].path : null;
+  if (image) {
+    createdMessageData.image = image;
+  } else if (pdf) {
+    createdMessageData.pdf = pdf;
   }
 
   const createdMessage = new Message(createdMessageData);

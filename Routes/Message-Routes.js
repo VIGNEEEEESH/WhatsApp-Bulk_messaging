@@ -8,7 +8,10 @@ router.get("/get/allmessages", messageController.getAllMessages);
 
 router.post(
   "/create/message",
-  fileUpload.single("image"),
+  fileUpload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "pdf", maxCount: 1 },
+  ]),
   [check("contacts").notEmpty()],
   messageController.createMessage
 );
