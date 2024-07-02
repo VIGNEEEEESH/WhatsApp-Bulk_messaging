@@ -63,6 +63,9 @@ app.use((error, req, res, next) => {
   res.status(error.code || 500);
   res.json({ message: error.message || "An unknown error occured" });
 });
+app.get("/", (req, res) => {
+  return res.status(200).json({ message: "Hello World" });
+});
 
 let counter = { fails: 0, success: 0 };
 
